@@ -32,9 +32,10 @@ brews:
 
     url_template: "https://github.com/elwin/franz/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     homepage: "https://github.com/elwin/franz"
-    description: "Tool to interact with Toggl (currently just rounding)"
+    description: "Your Swiss-Army Knife tool for interacting with Kafka."
 snapcrafts:
   -
+    id: franz-kafka
     summary: Franz
     description: "Your Swiss-Army Knife tool for interacting with Kafka."
     publish: true
