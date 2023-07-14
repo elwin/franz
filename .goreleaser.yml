@@ -35,7 +35,7 @@ brews:
     description: "Your Swiss-Army Knife tool for interacting with Kafka."
 snapcrafts:
   -
-    id: franz-kafka
+    name: franz-kafka
     summary: Franz
     description: "Your Swiss-Army Knife tool for interacting with Kafka."
     publish: true
