@@ -59,5 +59,5 @@ nix:
       branch: master
 
       pull_request:
-        enabled: true
+        enabled: false
         draft: true
