@@ -22,7 +22,7 @@ changelog:
       - '^docs:'
       - '^test:'
 brews:
-  - tap:
+  - repository:
       owner: elwin
       name: homebrew-tools
 
@@ -52,3 +52,12 @@ nix:
     commit_msg_template: "{{ .ProjectName }}: {{ .Tag }}"
     homepage: "https://github.com/elwin/franz"
     description: "Your Swiss-Army Knife tool for interacting with Kafka."
+
+    repository:
+      owner: elwin
+      name: nix-tools
+      branch: master
+
+      pull_request:
+        enabled: true
+        draft: true
