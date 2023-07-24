@@ -55,7 +55,7 @@ nix:
 
     repository:
       owner: elwin
-      name: nixpkgs
+      name: nix-tools
       branch: master
 
       pull_request:
