@@ -39,3 +39,16 @@ snapcrafts:
     summary: Franz
     description: "Your Swiss-Army Knife tool for interacting with Kafka."
     publish: true
+
+nix:
+  -
+    name: franz
+    url_template: "https://github.com/elwin/franz/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+
+    commit_author:
+      name: elwin
+      email: elwin.stephan@gmail.com
+
+    commit_msg_template: "{{ .ProjectName }}: {{ .Tag }}"
+    homepage: "https://github.com/elwin/franz"
+    description: "Your Swiss-Army Knife tool for interacting with Kafka."
