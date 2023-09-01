@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -85,7 +86,7 @@ func initConfig() {
 	viper.AutomaticEnv()
 
 	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err != nil {
+	if err := viper.ReadInConfig(); err != nil && errors.Is(err, viper.ConfigFileNotFoundError{}) {
 		fmt.Println("Can't read config:", err)
 		os.Exit(1)
 	}

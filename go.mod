@@ -1,4 +1,4 @@
-module github.com/open-ch/franz
+module github.com/elwin/franz
 
 go 1.18
 

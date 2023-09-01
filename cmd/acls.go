@@ -3,8 +3,8 @@ package cmd
 import (
 	"context"
 
+	"github.com/elwin/franz/pkg/franz"
 	"github.com/spf13/cobra"
-	"github.com/open-ch/franz/pkg/franz"
 )
 
 func init() {
@@ -25,7 +25,7 @@ func init() {
 	var setACLCmd = &cobra.Command{
 		Use:   "set",
 		Short: "Sets Kafka ACLs from Config Files",
-		Long:  `Sets Kafka ACLs from Config Files.
+		Long: `Sets Kafka ACLs from Config Files.
 
 Note that by default only a dry run will be made, no action is taken. To apply the changes, specify --apply.
 Furthermore, by default no ACLs will be deleted. To override this, specify --include-deletion. Once again,

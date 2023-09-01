@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/open-ch/franz/pkg/franz"
-	"github.com/open-ch/franz/pkg/list"
+	"github.com/elwin/franz/pkg/franz"
+	"github.com/elwin/franz/pkg/list"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -38,10 +38,10 @@ func getFranzConfig() franz.Config {
 }
 
 // execute does several things:
-// 1. creates new franz instance
-// 2. executes the passed in function
-// 3. on success, prints the return value to the console,
-//    otherwise it just returns the error
+//  1. creates new franz instance
+//  2. executes the passed in function
+//  3. on success, prints the return value to the console,
+//     otherwise it just returns the error
 func execute(fun func(ctx context.Context, f *franz.Franz) (string, error)) error {
 	ctx, cancel := context.WithCancel(context.Background())
 

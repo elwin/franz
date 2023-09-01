@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/open-ch/franz/cmd"
+	"github.com/elwin/franz/cmd"
 )
 
 func main() {

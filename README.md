@@ -7,7 +7,7 @@ managing topics or ACLs.
 
 ## Installation
 ```console
-go get github.com/open-ch/franz
+go get github.com/elwin/franz
 ```
 
 ## Usage

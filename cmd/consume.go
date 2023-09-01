@@ -7,7 +7,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/open-ch/franz/pkg/franz"
+	"github.com/elwin/franz/pkg/franz"
 
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"

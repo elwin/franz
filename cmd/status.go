@@ -3,7 +3,7 @@ package cmd
 import (
 	"context"
 
-	"github.com/open-ch/franz/pkg/franz"
+	"github.com/elwin/franz/pkg/franz"
 
 	"github.com/spf13/cobra"
 )
