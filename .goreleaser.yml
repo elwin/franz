@@ -24,6 +24,10 @@ changelog:
 nfpms:
   - id: packages
     maintainer: Elwin Stephan
+    formats:
+      - apk
+      - deb
+      - rpm
     file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 brews:
