@@ -21,6 +21,11 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+nfpms:
+  - id: packages
+    maintainer: Elwin Stephan
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
 brews:
   - repository:
       owner: elwin
@@ -61,11 +66,6 @@ nix:
       pull_request:
         enabled: false
         draft: true
-
-nfpms:
-  - id: packages
-    maintainer: Elwin Stephan
-    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 publishers:
   - name: fury.io
