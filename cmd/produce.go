@@ -14,6 +14,7 @@ import (
 func init() {
 	var (
 		key    string
+		value  string
 		encode string
 	)
 
@@ -42,6 +43,14 @@ Press Ctrl+D to exit.`,
 					schemaID = uint32(subjects.ID)
 				}
 
+				if value != "" {
+					if err := producer.SendMessage(topic, value, key); err != nil {
+						return "", err
+					}
+
+					return
+				}
+
 				reader := bufio.NewReader(os.Stdin)
 				for {
 					line, err := reader.ReadString('\n')
@@ -68,6 +77,7 @@ Press Ctrl+D to exit.`,
 	}
 
 	produceCmd.Flags().StringVarP(&key, "key", "k", "", "Specifies the key that should be used")
+	produceCmd.Flags().StringVar(&value, "value", "", "Specifies the value that should be used; otherwise, stdin will be used")
 	produceCmd.Flags().StringVarP(&encode, "encode", "e", "", "Avro encoding schema name")
 
 	RootCmd.AddCommand(produceCmd)

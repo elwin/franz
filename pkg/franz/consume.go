@@ -3,8 +3,8 @@ package franz
 import (
 	"context"
 	"errors"
+	"golang.org/x/sync/errgroup"
 	"io"
-	"sort"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -106,7 +106,7 @@ func (f *Franz) Monitor(req MonitorRequest) (*Receiver, error) {
 	return &rec, nil
 }
 
-func (f *Franz) HistoryEntries(req HistoryRequest) ([]Message, error) {
+func (f *Franz) HistoryEntries(req HistoryRequest) (chan Message, error) {
 	if len(req.Partitions) == 0 {
 		p, err := f.client.Partitions(req.Topic)
 		if err != nil {
@@ -122,95 +122,108 @@ func (f *Franz) HistoryEntries(req HistoryRequest) ([]Message, error) {
 	}
 	defer consumer.Close()
 
-	messages := make([]Message, 0)
+	messages := make(chan Message)
+
+	errs, _ := errgroup.WithContext(context.Background())
+
 	for _, partition := range req.Partitions {
-		startOffset, err := f.client.GetOffset(req.Topic, partition, req.From.UnixNano()/int64(time.Millisecond))
-		if err != nil {
-			return nil, err
-		}
+		partition := partition
 
-		if startOffset == sarama.OffsetNewest {
-			f.log.Warnf("no messages available on partition %d", partition)
-			continue
-		}
-
-		// endOffset refers to the message that will be produced next,
-		// i.e. we stop at the message received one before.
-		endOffset := sarama.OffsetNewest
-		if !req.To.Equal(time.Time{}) {
-			// Use absolute time
-
-			offset, err := f.client.GetOffset(req.Topic, partition, req.To.UnixNano()/int64(time.Millisecond))
+		errs.Go(func() error {
+			startOffset, err := f.client.GetOffset(req.Topic, partition, req.From.UnixNano()/int64(time.Millisecond))
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			endOffset = offset
-		} else if req.Count > 0 {
-			// Use offset count
-
-			endOffset = startOffset + req.Count
-
-			latestOffset, err := f.client.GetOffset(req.Topic, partition, sarama.OffsetNewest)
-			if err != nil {
-				return nil, err
+			if startOffset == sarama.OffsetNewest {
+				f.log.Warnf("no messages available on partition %d", partition)
+				return nil
 			}
 
-			if endOffset > latestOffset {
-				endOffset = latestOffset
-			}
-		}
+			// endOffset refers to the message that will be produced next,
+			// i.e. we stop at the message received one before.
+			endOffset := sarama.OffsetNewest
+			if !req.To.Equal(time.Time{}) {
+				// Use absolute time
 
-		if endOffset == sarama.OffsetNewest {
-			offset, err := f.client.GetOffset(req.Topic, partition, sarama.OffsetNewest)
-			if err != nil {
-				return nil, err
-			}
-
-			endOffset = offset
-		}
-
-		partitionConsumer, err := consumer.ConsumePartition(req.Topic, partition, startOffset)
-		if err != nil {
-			return nil, err
-		}
-
-		for message := range partitionConsumer.Messages() {
-			messageTransformed := Message{
-				Topic:     message.Topic,
-				Timestamp: message.Timestamp,
-				Partition: message.Partition,
-				Key:       string(message.Key),
-				Value:     string(message.Value),
-				Offset:    message.Offset,
-			}
-
-			if req.Decode {
-				decoded, err := f.codec.Decode(message.Value)
+				offset, err := f.client.GetOffset(req.Topic, partition, req.To.UnixNano()/int64(time.Millisecond))
 				if err != nil {
-					return nil, err
+					return err
 				}
 
-				messageTransformed.Value = string(decoded)
+				endOffset = offset
+			} else if req.Count > 0 {
+				// Use offset count
+
+				endOffset = startOffset + req.Count
+
+				latestOffset, err := f.client.GetOffset(req.Topic, partition, sarama.OffsetNewest)
+				if err != nil {
+					return err
+				}
+
+				if endOffset > latestOffset {
+					endOffset = latestOffset
+				}
 			}
 
-			messages = append(messages, messageTransformed)
-
-			if (message.Offset + 1) == endOffset {
-				if err := partitionConsumer.Close(); err != nil {
-					f.log.Error(err)
+			if endOffset == sarama.OffsetNewest {
+				offset, err := f.client.GetOffset(req.Topic, partition, sarama.OffsetNewest)
+				if err != nil {
+					return err
 				}
 
-				// drain remaining messages
-				for range partitionConsumer.Messages() {
+				endOffset = offset
+			}
+
+			partitionConsumer, err := consumer.ConsumePartition(req.Topic, partition, startOffset)
+			if err != nil {
+				return err
+			}
+
+			for message := range partitionConsumer.Messages() {
+				messageTransformed := Message{
+					Topic:     message.Topic,
+					Timestamp: message.Timestamp,
+					Partition: message.Partition,
+					Key:       string(message.Key),
+					Value:     string(message.Value),
+					Offset:    message.Offset,
+				}
+
+				if req.Decode {
+					decoded, err := f.codec.Decode(message.Value)
+					if err != nil {
+						return err
+					}
+
+					messageTransformed.Value = string(decoded)
+				}
+
+				messages <- messageTransformed
+
+				if (message.Offset + 1) == endOffset {
+					if err := partitionConsumer.Close(); err != nil {
+						f.log.Error(err)
+					}
+
+					// drain remaining messages
+					for range partitionConsumer.Messages() {
+					}
 				}
 			}
-		}
+
+			return nil
+		})
 	}
 
-	sort.Slice(messages, func(i, j int) bool {
-		return messages[i].Timestamp.Before(messages[j].Timestamp)
-	})
+	go func() {
+		if err := errs.Wait(); err != nil {
+			f.log.Error(err)
+		}
+
+		close(messages)
+	}()
 
 	return messages, nil
 }

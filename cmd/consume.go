@@ -65,7 +65,14 @@ You may consume from a kafka topic with arbitrary offsets.`,
 						return "", err
 					}
 
-					return format(messages, true)
+					for message := range messages {
+						out, err := formatJSON(message)
+						if err != nil {
+							return "", err
+						}
+
+						fmt.Println(out)
+					}
 				}
 
 				// non-historical mode
