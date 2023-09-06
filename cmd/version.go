@@ -2,9 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"runtime/debug"
+)
+
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 func init() {
@@ -12,16 +16,11 @@ func init() {
 		Use:   "version",
 		Short: "Prints the version of this build",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if bi, ok := debug.ReadBuildInfo(); ok {
-				for _, setting := range bi.Settings {
-					if setting.Key == "vcs.revision" {
-						fmt.Println(setting.Value)
-						return nil
-					}
-				}
-			}
+			fmt.Printf("Version: %s\n", version)
+			fmt.Printf("Commit: %s\n", commit)
+			fmt.Printf("Built at: %s\n", date)
 
-			return errors.New("Failed to retrieve the version")
+			return nil
 		},
 	})
 }
