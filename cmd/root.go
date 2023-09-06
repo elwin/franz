@@ -12,6 +12,12 @@ const (
 	envPrefix = "FRANZ"
 )
 
+type Version struct {
+	Tag    string
+	Commit string
+	Date   string
+}
+
 var (
 	cfgFile       string
 	verbose       bool
@@ -28,6 +34,8 @@ var RootCmd = &cobra.Command{
 franz provides you various helper tools to work with and debug Kafka
 such as consuming or producing messages and managing topics or ACLs.`,
 }
+
+var BuildVersion Version
 
 // Execute adds all child commands to the root command sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
