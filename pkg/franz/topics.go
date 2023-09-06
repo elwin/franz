@@ -93,6 +93,10 @@ func (f *Franz) GetTopicsExisting(includeInternal bool) ([]Topic, error) {
 	return topics, nil
 }
 
+func (f *Franz) ChangePartitions(topic string, partitions int) error {
+	return f.admin.CreatePartitions(topic, int32(partitions), nil, false)
+}
+
 func filterNonDefault(configs []sarama.ConfigEntry) (filtered []sarama.ConfigEntry) {
 	for _, config := range configs {
 		if !config.Default {

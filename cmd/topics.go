@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/elwin/franz/pkg/franz"
 	"github.com/spf13/cobra"
@@ -77,13 +78,34 @@ This can be overridden by specifying the --internal flag.
 		},
 	}
 
+	var changePartition = &cobra.Command{
+		Use:   "partitions [topic] [partitions]",
+		Short: "Change the number of partitions of a topic",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return execute(func(_ context.Context, f *franz.Franz) (s string, err error) {
+				topic := args[0]
+				partitions, err := strconv.Atoi(args[1])
+				if err != nil {
+					return "", err
+				}
+
+				if err := f.ChangePartitions(topic, partitions); err != nil {
+					return "", err
+				}
+
+				return "Successfully updated partitions", nil
+			})
+		},
+	}
+
 	setTopicsCmd.Flags().StringVarP(&topicsFile, "file", "f", "", "File containing the topics in YAML format to set")
 	setTopicsCmd.Flags().BoolVarP(&apply, "apply", "a", false, "Apply the changes")
 	setTopicsCmd.Flags().BoolVarP(&includeDeletion, "include-deletion", "d", false, "Remove topics that should be removed")
 	listTopicsCmd.Flags().BoolVarP(&includeInternal, "internal", "i", false, "Also output internal topics")
 
 	RootCmd.AddCommand(topicsCmd)
-	topicsCmd.AddCommand(setTopicsCmd, listTopicsCmd)
+	topicsCmd.AddCommand(setTopicsCmd, listTopicsCmd, changePartition)
 }
 
 type TopicWrapper struct {

@@ -4,17 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"github.com/spf13/cast"
 	"time"
 
 	"github.com/elwin/franz/pkg/franz"
 
-	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
-)
-
-const (
-	defaultMessageCount = 5
 )
 
 func init() {
@@ -39,86 +34,67 @@ You may consume from a kafka topic with arbitrary offsets.`,
 			topic := args[0]
 
 			return execute(func(ctx context.Context, f *franz.Franz) (string, error) {
+				if follow && duration > 0 {
+					return "", errors.New("when \"follow\" is enabled, duration may not be set")
+				}
+
+				if count > 0 && duration > 0 {
+					return "", errors.New("only one of \"count\" or \"duration\" may be used")
+				}
+
+				var from time.Time
 				if start != "" {
-					// historical mode
-					from, err := cast.StringToDate(start)
+					var err error
+					from, err = cast.StringToDate(start)
 					if err != nil {
 						return "", err
-					}
-
-					var to time.Time
-					if duration > 0 {
-						to = from.Add(duration)
-					}
-
-					req := franz.HistoryRequest{
-						Topic:      topic,
-						From:       from,
-						To:         to,
-						Count:      count,
-						Partitions: convertSliceIntToInt32(partitions),
-						Decode:     decode,
-					}
-
-					messages, err := f.HistoryEntries(req)
-					if err != nil {
-						return "", err
-					}
-
-					for message := range messages {
-						out, err := formatJSON(message)
-						if err != nil {
-							return "", err
-						}
-
-						fmt.Println(out)
 					}
 				}
 
-				// non-historical mode
-				req := franz.MonitorRequest{
+				var to time.Time
+				if duration > 0 {
+					if start == "" {
+						from = time.Now().Add(-duration)
+					} else {
+						to = from.Add(duration)
+					}
+				}
+
+				req := franz.ConsumeRequest{
 					Topic:      topic,
-					Partitions: convertSliceIntToInt32(partitions),
+					From:       from,
+					To:         to,
 					Count:      count,
 					Follow:     follow,
+					Partitions: convertSliceIntToInt32(partitions),
 					Decode:     decode,
 				}
 
-				rec, err := f.Monitor(req)
+				messages, err := f.HistoryEntries(req, ctx)
 				if err != nil {
 					return "", err
 				}
 
-				go func() {
-					<-ctx.Done()
-					rec.Stop()
-				}()
-
-				for {
-					msg, err := rec.Next()
-					if errors.Is(err, io.EOF) {
-						return "", nil
-					} else if err != nil {
-						return "", err
-					}
-
-					out, err := formatJSON(msg)
+				for message := range messages {
+					out, err := formatJSON(message)
 					if err != nil {
 						return "", err
 					}
 
 					fmt.Println(out)
 				}
+
+				return "", nil
 			})
 		},
 	}
 
 	RootCmd.AddCommand(monitorCmd)
 
-	monitorCmd.Flags().Int64VarP(&count, "number", "n", defaultMessageCount, "Consumes the n last messages for each partition")
+	monitorCmd.Flags().Int64VarP(&count, "count", "n", 0, "Consumes the n last messages for each partition")
 	monitorCmd.Flags().IntSliceVarP(&partitions, "partitions", "p", nil, "The partitions to consume (comma-separated), all partitions will be used if not set")
-	monitorCmd.Flags().DurationVarP(&duration, "duration", "d", 0, "Time-frame after \"from\", only effective with -s, disables -n")
-	monitorCmd.Flags().StringVarP(&start, "start", "s", "", "Starting time, disables -f")
+	monitorCmd.Flags().DurationVarP(&duration, "duration", "d", 0, "Time-frame after \"start\", or if no start is defined, use the specified duration before now as start; may not be used with \"follow\"")
+	monitorCmd.Flags().StringVarP(&start, "start", "s", "", "Starting time")
 	monitorCmd.Flags().BoolVarP(&follow, "follow", "f", false, "Consume future messages when they arrive")
 	monitorCmd.Flags().BoolVar(&decode, "decode", false, "Decodes the message according to the schema defined in the schema registry")
 }

@@ -6,17 +6,21 @@ Your Swiss-Army Knife tool for interacting with Kafka.
 managing topics or ACLs.
 
 ## Installation
+
 ```console
 go get github.com/elwin/franz
 ```
 
 ## Usage
-To connect to your Kafka cluster and optionally to a schema registry, `franz` reads from a configuration file that can be
+
+To connect to your Kafka cluster and optionally to a schema registry, `franz` reads from a configuration file that can
+be
 placed in one of the following paths
+
 - `~/.config/franz`
 - `/opt/franz/etc`
 - any path you wish, passed in using `--config /path/to/config`
-A configuration file has roughly the form of [config.yml.sample](config.yml.sample).
+  A configuration file has roughly the form of [config.yml.sample](config.yml.sample).
 
 ```console
 $ franz help
@@ -36,7 +40,9 @@ Available Commands:
 You can get more information about any command by running `franz help [command]`.
 
 ## Examples
+
 ### List relevant information for all Kafka brokers
+
 ```console
 $ franz status --table
 +-------------------------------------------+-----------+--------+---------------------+---------------------+----------+
@@ -50,6 +56,7 @@ $ franz status --table
 ```
 
 ### Continuously read from a topic
+
 ```console
 $ franz consume notifications.users --follow
 {
@@ -77,6 +84,7 @@ Find the name of the schema that corresponds to the topic you wish to publish to
 By default this is the topic name with a '-value' suffix if it wasn't specified by the Serde.
 
 You can check the schema name by listing the schemas in the registry:
+
 ```console
 $ franz registry list
 [
@@ -85,9 +93,11 @@ $ franz registry list
   ...
 ]
 ```
+
 As with the JSON String serialized produce command, start franz reading from stdin
 by specifying the topic but also specify the schema name with the --encode option
 Then on subsequent lines submit the JSON equivalent of the messages:
+
 ```console
 $ franz produce pageviews --encode pageviews-value
 {"viewtime": 248888, "userid": "User_99", "pageid": "Page_99"}
@@ -95,8 +105,10 @@ $ franz produce pageviews --encode pageviews-value
 ```
 
 ## Contributors
+
 Due to a migration of the codebase, some authors might not show up in the git history even though they contributed to
 this project:
+
 - [Symeon Meichanetzoglou](https://github.com/symaras)
 - [Daniel Aschwanden](https://github.com/nimdanitro)
 - Ines Haymann
@@ -108,4 +120,5 @@ this project:
 - [Derrick Oswald](https://github.com/derrickoswald)
 
 ## License
+
 Please see [LICENSE](LICENSE).

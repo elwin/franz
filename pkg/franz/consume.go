@@ -2,12 +2,10 @@ package franz
 
 import (
 	"context"
-	"errors"
+	"github.com/IBM/sarama"
 	"golang.org/x/sync/errgroup"
 	"io"
 	"time"
-
-	"github.com/IBM/sarama"
 )
 
 type Result struct {
@@ -30,10 +28,11 @@ type MonitorRequest struct {
 	Decode     bool
 }
 
-type HistoryRequest struct {
+type ConsumeRequest struct {
 	Topic      string
 	From, To   time.Time // To takes precedence over Count
 	Count      int64
+	Follow     bool
 	Partitions []int32
 	Decode     bool
 }
@@ -66,47 +65,7 @@ func (r *Receiver) Next() (Message, error) {
 	return Message{}, io.EOF
 }
 
-func (f *Franz) Monitor(req MonitorRequest) (*Receiver, error) {
-	if req.Count <= 0 {
-		return nil, errors.New("desired message count needs to be larger than 0")
-	}
-
-	if len(req.Partitions) == 0 {
-		p, err := f.client.Partitions(req.Topic)
-		if err != nil {
-			return nil, err
-		}
-
-		req.Partitions = p
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	rec := Receiver{
-		cancel:             cancel,
-		ctx:                ctx,
-		messageC:           make(chan Result),
-		availableConsumers: len(req.Partitions),
-	}
-
-	for _, partition := range req.Partitions {
-		partition := partition // capture variable locally for go-routines
-
-		go func() {
-			if err := f.consume(&rec, req.Topic, partition, req.Count, req.Follow, req.Decode); err != nil {
-				if errors.Is(err, ErrNoMessages) {
-					f.log.Warnf("no messages available on partition %d", partition)
-				} else if err != nil {
-					f.log.Error(err)
-				}
-			}
-		}()
-	}
-
-	return &rec, nil
-}
-
-func (f *Franz) HistoryEntries(req HistoryRequest) (chan Message, error) {
+func (f *Franz) HistoryEntries(req ConsumeRequest, ctx context.Context) (chan Message, error) {
 	if len(req.Partitions) == 0 {
 		p, err := f.client.Partitions(req.Topic)
 		if err != nil {
@@ -124,7 +83,7 @@ func (f *Franz) HistoryEntries(req HistoryRequest) (chan Message, error) {
 
 	messages := make(chan Message)
 
-	errs, _ := errgroup.WithContext(context.Background())
+	errs, _ := errgroup.WithContext(ctx)
 
 	for _, partition := range req.Partitions {
 		partition := partition
@@ -136,13 +95,13 @@ func (f *Franz) HistoryEntries(req HistoryRequest) (chan Message, error) {
 			}
 
 			if startOffset == sarama.OffsetNewest {
-				f.log.Warnf("no messages available on partition %d", partition)
-				return nil
+				f.log.Warnf("no messages (yet) available on partition %d, starting with offset 0", partition)
+				startOffset = 0
 			}
 
 			// endOffset refers to the message that will be produced next,
 			// i.e. we stop at the message received one before.
-			endOffset := sarama.OffsetNewest
+			var endOffset int64
 			if !req.To.Equal(time.Time{}) {
 				// Use absolute time
 
@@ -162,12 +121,16 @@ func (f *Franz) HistoryEntries(req HistoryRequest) (chan Message, error) {
 					return err
 				}
 
-				if endOffset > latestOffset {
+				if !req.Follow && endOffset > latestOffset {
 					endOffset = latestOffset
 				}
-			}
+			} else if req.Follow {
+				// Just continue until the user cancels
 
-			if endOffset == sarama.OffsetNewest {
+				endOffset = -1 // never end
+			} else {
+				// Use the latest offset
+
 				offset, err := f.client.GetOffset(req.Topic, partition, sarama.OffsetNewest)
 				if err != nil {
 					return err
@@ -181,36 +144,43 @@ func (f *Franz) HistoryEntries(req HistoryRequest) (chan Message, error) {
 				return err
 			}
 
-			for message := range partitionConsumer.Messages() {
-				messageTransformed := Message{
-					Topic:     message.Topic,
-					Timestamp: message.Timestamp,
-					Partition: message.Partition,
-					Key:       string(message.Key),
-					Value:     string(message.Value),
-					Offset:    message.Offset,
-				}
+			messageC := partitionConsumer.Messages()
 
-				if req.Decode {
-					decoded, err := f.codec.Decode(message.Value)
-					if err != nil {
-						return err
+		loop:
+			for {
+				select {
+				case <-ctx.Done():
+					break loop
+
+				case message := <-messageC:
+					messageTransformed := Message{
+						Topic:     message.Topic,
+						Timestamp: message.Timestamp,
+						Partition: message.Partition,
+						Key:       string(message.Key),
+						Value:     string(message.Value),
+						Offset:    message.Offset,
 					}
 
-					messageTransformed.Value = string(decoded)
-				}
+					if req.Decode {
+						decoded, err := f.codec.Decode(message.Value)
+						if err != nil {
+							return err
+						}
 
-				messages <- messageTransformed
-
-				if (message.Offset + 1) == endOffset {
-					if err := partitionConsumer.Close(); err != nil {
-						f.log.Error(err)
+						messageTransformed.Value = string(decoded)
 					}
 
-					// drain remaining messages
-					for range partitionConsumer.Messages() {
+					messages <- messageTransformed
+
+					if (message.Offset + 1) == endOffset {
+						break loop
 					}
 				}
+			}
+
+			if err := partitionConsumer.Close(); err != nil {
+				f.log.Error(err)
 			}
 
 			return nil
@@ -226,84 +196,4 @@ func (f *Franz) HistoryEntries(req HistoryRequest) (chan Message, error) {
 	}()
 
 	return messages, nil
-}
-
-func (f *Franz) consume(receiver *Receiver, topic string, partition int32, count int64, follow, decode bool) error {
-	defer func() {
-		receiver.messageC <- Result{err: io.EOF}
-	}()
-
-	offsetNewest, err := f.client.GetOffset(topic, partition, sarama.OffsetNewest)
-	if err != nil {
-		return err
-	}
-
-	offsetOldest, err := f.client.GetOffset(topic, partition, sarama.OffsetOldest)
-	if err != nil {
-		return err
-	}
-
-	if offsetOldest == offsetNewest {
-		return ErrNoMessages
-	}
-
-	offsetStart := offsetNewest - count
-	if offsetStart < offsetOldest {
-		offsetStart = sarama.OffsetOldest
-	}
-
-	offsetEnd := offsetNewest - 1
-	if follow {
-		offsetEnd = sarama.OffsetNewest
-	}
-
-	f.log.Infof("starting consumer for partition %d at offsetNewest %d", partition, offsetStart)
-
-	consumer, err := sarama.NewConsumerFromClient(f.client)
-	if err != nil {
-		return err
-	}
-	defer consumer.Close()
-
-	pc, err := consumer.ConsumePartition(topic, partition, offsetStart)
-	if err != nil {
-		return err
-	}
-	defer pc.Close()
-
-	for {
-		select {
-		case <-receiver.ctx.Done():
-			return nil
-
-		case message := <-pc.Messages():
-			msg := Message{
-				Topic:     message.Topic,
-				Timestamp: message.Timestamp,
-				Partition: message.Partition,
-				Key:       string(message.Key),
-				Value:     string(message.Value),
-				Offset:    message.Offset,
-			}
-
-			if decode {
-				decoded, err := f.codec.Decode(message.Value)
-				if err != nil {
-					return err
-				}
-
-				msg.Value = string(decoded)
-			}
-
-			select {
-			case <-receiver.ctx.Done():
-				return nil
-			case receiver.messageC <- Result{msg: msg}:
-			}
-
-			if msg.Offset == offsetEnd {
-				return nil
-			}
-		}
-	}
 }

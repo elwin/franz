@@ -50,7 +50,7 @@ func init() {
 
 	pf := RootCmd.PersistentFlags()
 
-	pf.StringArrayVarP(&brokerList, "brokers", "", []string{}, "Display messages for given brokers")
+	pf.StringArrayVarP(&brokerList, "brokers", "", []string{"localhost:9092"}, "Display messages for given brokers")
 	pf.StringVar(&registry, "registry", "", "Registry endpoint")
 	pf.StringVar(&cfgFile, "config", "", "Path of config file")
 	pf.StringVar(&keyFile, "tls.key", "", "X509 key file in PEM encoding")
